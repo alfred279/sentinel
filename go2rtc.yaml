@@ -1,0 +1,32 @@
+# go2rtc configuration — the streaming engine.
+# The Sentinel backend rewrites the `streams:` section dynamically as cameras
+# are added/removed via its API. The values below are an EXAMPLE of the shape.
+
+api:
+  listen: ":1984"          # go2rtc REST API + web UI (LAN only)
+
+webrtc:
+  listen: ":8555"          # WebRTC TCP candidate (low-latency live view)
+  # candidates auto-detected; add your hub's LAN IP if discovery misses it
+
+rtsp:
+  listen: ":8554"
+
+log:
+  level: info
+
+# ── Streams (managed by Sentinel backend; example shown) ──
+streams:
+  # A 4K ONVIF camera. Two stream profiles is the standard pattern:
+  #   main = full 4K (recording + fullscreen live)
+  #   sub  = lower-res (grid view, mobile, low bandwidth) — saves huge CPU/bandwidth
+  front_door:
+    - rtsp://USER:PASS@192.168.1.50:554/Streaming/Channels/101   # main 4K H.265
+  front_door_sub:
+    - rtsp://USER:PASS@192.168.1.50:554/Streaming/Channels/102   # sub stream
+
+# Hardware acceleration note:
+#   4K H.265 decode in software is brutal. go2rtc passes through the native codec
+#   to WebRTC without transcoding wherever possible (this is why it's efficient).
+#   Transcoding is only needed for HLS fallback or incompatible clients — enable
+#   VAAPI/NVENC there. See docs/HARDWARE.md.

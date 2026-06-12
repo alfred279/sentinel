@@ -1,0 +1,60 @@
+# Sentinel — PRODUCTION compose. Pulls prebuilt images (no source build).
+# This is what the installer downloads onto the hub.
+# Difference from the dev docker-compose.yml: `image:` instead of `build:`.
+
+services:
+  go2rtc:
+    image: alexxit/go2rtc:latest
+    container_name: sentinel-go2rtc
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./go2rtc.yaml:/config/go2rtc.yaml
+    environment:
+      - TZ=${TZ:-America/Chicago}
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: sentinel-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-sentinel}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME:-sentinel}
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-sentinel}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    image: ghcr.io/Y alfred279/sentinel-backend:${SENTINEL_VERSION:-latest}
+    container_name: sentinel-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - NODE_ENV=production
+      - PORT=4000
+      - DATABASE_URL=postgres://${DB_USER:-sentinel}:${DB_PASSWORD}@localhost:5432/${DB_NAME:-sentinel}
+      - GO2RTC_URL=http://localhost:1984
+      - JWT_SECRET=${JWT_SECRET:?set JWT_SECRET}
+      - HUB_ENCRYPTION_KEY=${HUB_ENCRYPTION_KEY:?set HUB_ENCRYPTION_KEY}
+      - RECORDINGS_PATH=/recordings
+      - TZ=${TZ:-America/Chicago}
+    volumes:
+      - ./data/recordings:/recordings
+    network_mode: host
+
+  frontend:
+    image: ghcr.io/alfred279/sentinel-frontend:${SENTINEL_VERSION:-latest}
+    container_name: sentinel-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"

@@ -1,0 +1,68 @@
+# Sentinel hub — one command to run the whole system: `docker compose up -d`
+# This runs ON the home hub (mini PC / Pi 5 / NUC).
+
+services:
+  # ── Streaming engine: ingests camera RTSP, restreams as WebRTC/HLS ──
+  go2rtc:
+    image: alexxit/go2rtc:latest
+    container_name: sentinel-go2rtc
+    restart: unless-stopped
+    network_mode: host          # needed for WebRTC + LAN camera discovery
+    volumes:
+      - ./go2rtc.yaml:/config/go2rtc.yaml
+    environment:
+      - TZ=${TZ:-America/Chicago}
+
+  # ── Database ──
+  postgres:
+    image: postgres:16-alpine
+    container_name: sentinel-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-sentinel}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+      POSTGRES_DB: ${DB_NAME:-sentinel}
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-sentinel}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Sentinel backend API ──
+  backend:
+    build: ./backend
+    container_name: sentinel-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - NODE_ENV=production
+      - PORT=4000
+      - DATABASE_URL=postgres://${DB_USER:-sentinel}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-sentinel}
+      - GO2RTC_URL=http://localhost:1984
+      - JWT_SECRET=${JWT_SECRET:?set JWT_SECRET in .env}
+      - HUB_ENCRYPTION_KEY=${HUB_ENCRYPTION_KEY:?set HUB_ENCRYPTION_KEY in .env}
+      - RECORDINGS_PATH=/recordings
+      - TZ=${TZ:-America/Chicago}
+    volumes:
+      - ./data/recordings:/recordings
+    network_mode: host          # backend talks to go2rtc + cameras on the LAN
+
+  # ── Frontend (served by backend in prod; dev runs Vite separately) ──
+  frontend:
+    build: ./frontend
+    container_name: sentinel-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
+
+# Production note: for remote access, do NOT expose ports to the public internet
+# directly. Use Tailscale (recommended) or a reverse tunnel. See docs/REMOTE_ACCESS.md.
