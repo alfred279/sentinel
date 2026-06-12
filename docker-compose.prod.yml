@@ -31,7 +31,7 @@ services:
       retries: 5
 
   backend:
-    image: ghcr.io/Y alfred279/sentinel-backend:${SENTINEL_VERSION:-latest}
+    image: ghcr.io/alfred279/sentinel-backend:${SENTINEL_VERSION:-latest}
     container_name: sentinel-backend
     restart: unless-stopped
     depends_on:

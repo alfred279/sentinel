@@ -11,7 +11,7 @@
 
 set -euo pipefail
 
-REPO=https://github.com/alfred279/sentinel          # <-- change to your GitHub repo
+REPO="alfred279/sentinel"          # <-- change to your GitHub repo
 INSTALL_DIR="/opt/sentinel"
 RAW="https://raw.githubusercontent.com/${REPO}/main"
 
