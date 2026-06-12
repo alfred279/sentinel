@@ -4,6 +4,7 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install
 COPY . .
-RUN npm run build
 EXPOSE 4000
-CMD ["node", "dist/server.js"]
+# Run the TypeScript directly with tsx (no separate compile step).
+# This lets the scaffold package and run while features are still being built.
+CMD ["npx", "tsx", "src/server.ts"]
